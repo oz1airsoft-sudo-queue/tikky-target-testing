@@ -47,14 +47,38 @@ const scenarios = [
   }
 ];
 
+const DEFAULT_TEAMS = [
+  { id: 'resistance', name: 'RESISTANCE', color: '#800080' },
+  { id: 'militia', name: 'MILITIA', color: '#FFD700' }
+];
+
+const DEFAULT_POINTS = [
+  { id: 'security-depot', label: 'Security Depot' },
+  { id: 'church-ruins', label: 'Church Ruins' },
+  { id: 'fort-keith', label: 'FORT Keith' },
+  { id: 'necropolis', label: 'Necropolis (Cemetary Gates)' },
+  { id: 'forest-hill', label: 'Forest Hill' },
+  { id: 'ranch', label: 'Ranch' },
+  { id: 'oilfields', label: 'Oilfields' },
+  { id: 'tank-city', label: 'Tank City' },
+  { id: 'fort-caley', label: 'FORT Caley' },
+  { id: 'fort-alastair', label: 'FORT Alastair' },
+  { id: 'fort-kurtis', label: 'FORT Kurtis' },
+  { id: 'citadel', label: 'Citadel' },
+  { id: 'shelter', label: 'SHELTER' },
+  { id: 'bunker', label: 'BUNKER' },
+  { id: 'crash-site', label: 'CRASH SITE' }
+];
+
 let state = {
-  teams: [],
-  points: [],
+  teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+  points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
   match: {
     state: 'idle',
     startedAt: null,
     pausedAt: null,
     totalPaused: 0,
+    endedAt: null,
     scenarioId: null,
     operator: ''
   }
@@ -81,6 +105,17 @@ function formatDuration(ms) {
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
   return (h > 0 ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+}
+
+function getMatchElapsed() {
+  if (!state.match.startedAt) return 0;
+  const ref =
+    state.match.state === 'ended'
+      ? state.match.endedAt || Date.now()
+      : state.match.state === 'paused'
+      ? state.match.pausedAt
+      : Date.now();
+  return ref - state.match.startedAt - state.match.totalPaused;
 }
 
 function appendLog(line) {
@@ -120,9 +155,9 @@ function resetDefaults() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LOG_KEY);
   state = {
-    teams: [],
-    points: [],
-    match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, scenarioId: null, operator: '' }
+    teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+    points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
+    match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' }
   };
   logBuffer = '';
   render();
@@ -148,7 +183,7 @@ function setOwner(pointId, teamId) {
     if (seg && !seg.endTs) seg.endTs = now;
   }
   point.owner = teamId;
-  if (teamId) {
+  if (teamId && state.match.state === 'running') {
     point.segments.push({ teamId, startTs: now, endTs: null });
   }
   appendLog(`${nowIso()} | CAPTURE | point=${point.label} | from=${from ? getTeam(from).name : 'Neutral'} | to=${teamId ? getTeam(teamId).name : 'Neutral'} | actor=${state.match.operator}`);
@@ -176,6 +211,7 @@ function startMatch() {
   state.match.state = 'running';
   state.match.startedAt = now;
   state.match.totalPaused = 0;
+  state.match.endedAt = null;
   // start segments for points with owners
   state.points.forEach((p) => {
     if (p.owner) {
@@ -238,6 +274,7 @@ function endMatch() {
     state.match.pausedAt = null;
   }
   state.match.state = 'ended';
+  state.match.endedAt = now;
   appendLog(`${nowIso()} | END`);
   // summary
   const totals = getTeamTotals();
@@ -278,6 +315,7 @@ function loadScenario(id) {
   state.match.startedAt = null;
   state.match.pausedAt = null;
   state.match.totalPaused = 0;
+  state.match.endedAt = null;
   appendLog(`${nowIso()} | SCENARIO | id=${sc.name}`);
   render();
   saveState();
@@ -347,16 +385,36 @@ function renderDashboard() {
     ownerEl.textContent = ownerName;
     card.appendChild(document.createElement('div')).textContent = p.label;
     card.appendChild(ownerEl);
-    // elapsed time for owner
+    // elapsed time for current owner (since last capture)
     let time = 0;
-    p.segments
-      .filter((s) => s.teamId === p.owner && !s.endTs)
-      .forEach((s) => {
-        time += now - s.startTs;
-      });
+    if (p.owner) {
+      for (let i = p.segments.length - 1; i >= 0; i--) {
+        const seg = p.segments[i];
+        if (seg.teamId !== p.owner) break;
+        const end = seg.endTs || now;
+        time += end - seg.startTs;
+      }
+    }
     const timeEl = document.createElement('div');
     timeEl.textContent = formatDuration(time);
     card.appendChild(timeEl);
+
+    // total times per team on this point
+    const totals = {};
+    state.teams.forEach((t) => (totals[t.id] = 0));
+    p.segments.forEach((s) => {
+      const end = s.endTs || now;
+      totals[s.teamId] += end - s.startTs;
+    });
+    const timesWrap = document.createElement('div');
+    timesWrap.className = 'team-times';
+    state.teams.forEach((t) => {
+      const div = document.createElement('div');
+      div.textContent = `${t.name}: ${formatDuration(totals[t.id])}`;
+      div.style.color = t.color;
+      timesWrap.appendChild(div);
+    });
+    card.appendChild(timesWrap);
     const ownerDisp = document.createElement('div');
     ownerDisp.className = 'owner-display';
     // neutral button
@@ -399,11 +457,17 @@ function renderMatchControls() {
     state.match.state === 'idle' || state.match.state === 'ended';
 }
 
+function renderGlobalTimer() {
+  const el = document.getElementById('globalTimer');
+  if (el) el.textContent = formatDuration(getMatchElapsed());
+}
+
 function render() {
   renderSetup();
   renderDashboard();
   renderTotals();
   renderMatchControls();
+  renderGlobalTimer();
 }
 
 // ---------- Initialization ----------
@@ -466,6 +530,7 @@ function initApp() {
     if (state.match.state === 'running') {
       renderDashboard();
       renderTotals();
+      renderGlobalTimer();
     }
   }, 1000);
 }
