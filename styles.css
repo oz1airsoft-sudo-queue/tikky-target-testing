@@ -1,0 +1,101 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #eee;
+}
+
+.controls button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+}
+
+#setupView {
+  padding: 1rem;
+  background: #f7f7f7;
+}
+
+#setupView.hidden {
+  display: none;
+}
+
+.field {
+  margin: 0.5rem 0;
+}
+
+.list > div {
+  margin: 0.25rem 0;
+}
+
+#dashboard {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.point-card {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 1rem;
+  min-width: 150px;
+  text-align: center;
+}
+
+.point-card .owner {
+  font-weight: bold;
+}
+
+.point-card .owner.none {
+  color: #666;
+}
+
+.owner-display {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.owner-display button {
+  padding: 0.5rem;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+}
+
+footer#totals {
+  padding: 1rem;
+  background: #eee;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+footer#totals .team-total {
+  font-size: 1.1rem;
+}
+
+body.high-contrast {
+  background: #000;
+  color: #fff;
+}
+
+body.high-contrast .controls {
+  background: #222;
+}
+
+body.high-contrast #setupView {
+  background: #111;
+}
+
+body.high-contrast .point-card {
+  border-color: #fff;
+}

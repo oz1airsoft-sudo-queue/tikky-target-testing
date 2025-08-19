@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture Counter</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="controls">
+    <button id="setupToggle">Setup</button>
+    <button id="startBtn">Start</button>
+    <button id="pauseBtn" disabled>Pause</button>
+    <button id="resumeBtn" disabled>Resume</button>
+    <button id="endBtn" disabled>End</button>
+    <button id="resetBtn">Reset</button>
+    <button id="downloadLogBtn">Download Log</button>
+    <span id="matchStatus"></span>
+  </header>
+
+  <section id="setupView" class="hidden">
+    <h2>Setup</h2>
+    <div class="field">
+      <label>Operator <input id="operatorInput" type="text"></label>
+    </div>
+
+    <h3>Scenarios</h3>
+    <div class="field">
+      <select id="scenarioSelect"><option value="">--Choose--</option></select>
+      <button id="loadScenarioBtn">Load</button>
+    </div>
+
+    <h3>Teams</h3>
+    <div id="teamList" class="list"></div>
+    <div class="field">
+      <input id="newTeamName" placeholder="Team name">
+      <input id="newTeamColor" type="color" value="#ff0000">
+      <button id="addTeamBtn">Add Team</button>
+    </div>
+
+    <h3>Points</h3>
+    <div id="pointList" class="list"></div>
+    <div class="field">
+      <input id="newPointLabel" placeholder="Point label">
+      <button id="addPointBtn">Add Point</button>
+    </div>
+
+    <div class="field">
+      <button id="highContrastToggle">Toggle High Contrast</button>
+    </div>
+
+    <div class="field">
+      <button id="closeSetupBtn">Close</button>
+      <button id="resetDefaultsBtn">Reset Defaults</button>
+    </div>
+  </section>
+
+  <main id="dashboard"></main>
+  <footer id="totals"></footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
