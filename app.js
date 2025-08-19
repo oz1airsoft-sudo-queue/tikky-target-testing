@@ -73,6 +73,7 @@ const DEFAULT_POINTS = [
 let state = {
   teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
   points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
+
   match: {
     state: 'idle',
     startedAt: null,
@@ -156,7 +157,9 @@ function resetDefaults() {
   localStorage.removeItem(LOG_KEY);
   state = {
     teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+
     points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
+
     match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' }
   };
   logBuffer = '';

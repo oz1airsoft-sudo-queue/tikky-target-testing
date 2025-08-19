@@ -7,7 +7,9 @@ Simple web app for tracking control over multiple capture points by several team
 - Global match timer with start, pause, and resume controls.
 - Individual timers for each capture point and per-team time tracking.
 - Default teams: RESISTANCE (purple) and MILITIA (gold).
+
 - Default capture points: Security Depot, Church Ruins, FORT Keith, Necropolis (Cemetary Gates), Forest Hill, Ranch, Oilfields, Tank City, FORT Caley, FORT Alastair, FORT Kurtis, Citadel, plus temporary blue points SHELTER, BUNKER, and CRASH SITE.
+
 
 ## Usage
 
