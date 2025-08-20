@@ -48,12 +48,12 @@ const scenarios = [
 ];
 
 const DEFAULT_TEAMS = [
-  { id: 'resistance', name: 'RESISTANCE', color: '#800080' },
+  { id: 'resistance', name: 'RESISTANCE', color: '#ff00ff' },
   { id: 'militia', name: 'MILITIA', color: '#FFD700' }
 ];
 
 let state = {
-  teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+  teams: DEFAULT_TEAMS.map((t) => ({ ...t, lastCapture: null })),
   points: [],
   match: {
     state: 'idle',
@@ -89,6 +89,24 @@ function formatDuration(ms) {
   return (h > 0 ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
 }
 
+function formatTimestampParts(ts) {
+  if (!ts) return { military: '', standard: '' };
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const military = hh + mm;
+  let h12 = d.getHours() % 12;
+  h12 = h12 === 0 ? 12 : h12;
+  const standard = `${String(h12).padStart(2, '0')}:${mm} ${d.getHours() >= 12 ? 'PM' : 'AM'}`;
+  return { military, standard };
+}
+
+function formatTimestamp(ts) {
+  if (!ts) return '-- (--:-- --)';
+  const { military, standard } = formatTimestampParts(ts);
+  return `${military} (${standard})`;
+}
+
 function getMatchElapsed() {
   if (!state.match.startedAt) return 0;
   const ref =
@@ -115,6 +133,48 @@ function downloadLog() {
   URL.revokeObjectURL(url);
 }
 
+function downloadCsv() {
+  const lines = ['timestampISO,timestamp24,timestamp12,event,details'];
+  logBuffer
+    .trim()
+    .split(/\n/)
+    .forEach((line) => {
+      if (!line) return;
+      const parts = line.split('|').map((s) => s.trim());
+      const iso = parts.shift();
+      const event = parts.shift() || '';
+      const details = parts.join(' | ').replace(/,/g, ';');
+      const ts = Date.parse(iso);
+      const { military, standard } = formatTimestampParts(ts);
+      lines.push(`${iso},${military},${standard},${event},${details}`);
+    });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'capture-log.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importCsv(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = reader.result.trim();
+    const lines = text.split(/\n/);
+    lines.shift();
+    logBuffer = lines
+      .filter((l) => l)
+      .map((l) => {
+        const [iso, , , event, details] = l.split(',');
+        return `${iso} | ${event} | ${details.replace(/;/g, ',')}`;
+      })
+      .join('\n');
+    saveState();
+  };
+  reader.readAsText(file);
+}
+
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   localStorage.setItem(LOG_KEY, logBuffer);
@@ -125,6 +185,9 @@ function loadState() {
   if (s) {
     try {
       state = JSON.parse(s);
+      state.teams.forEach((t) => {
+        if (typeof t.lastCapture === 'undefined') t.lastCapture = null;
+      });
     } catch (e) {
       console.error('Failed to parse state', e);
     }
@@ -137,7 +200,7 @@ function resetDefaults() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LOG_KEY);
   state = {
-    teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+    teams: DEFAULT_TEAMS.map((t) => ({ ...t, lastCapture: null })),
     points: [],
     match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' }
   };
@@ -167,6 +230,8 @@ function setOwner(pointId, teamId) {
   point.owner = teamId;
   if (teamId && state.match.state === 'running') {
     point.segments.push({ teamId, startTs: now, endTs: null });
+    const team = getTeam(teamId);
+    if (team) team.lastCapture = now;
   }
   appendLog(`${nowIso()} | CAPTURE | point=${point.label} | from=${from ? getTeam(from).name : 'Neutral'} | to=${teamId ? getTeam(teamId).name : 'Neutral'} | actor=${state.match.operator}`);
   render();
@@ -198,6 +263,8 @@ function startMatch() {
   state.points.forEach((p) => {
     if (p.owner) {
       p.segments.push({ teamId: p.owner, startTs: now, endTs: null });
+      const team = getTeam(p.owner);
+      if (team) team.lastCapture = now;
     }
   });
   appendLog(`${nowIso()} | START | operator=${state.match.operator} | scenario=${state.match.scenarioId || 'custom'}`);
@@ -290,7 +357,7 @@ function resetMatch() {
 function loadScenario(id) {
   const sc = scenarios.find((s) => s.id === id);
   if (!sc) return;
-  state.teams = JSON.parse(JSON.stringify(sc.teams));
+  state.teams = sc.teams.map((t) => ({ ...t, lastCapture: null }));
   state.points = sc.points.map((p) => ({ ...p, segments: [], owner: p.owner || null }));
   state.match.scenarioId = sc.id;
   state.match.state = 'idle';
@@ -392,7 +459,11 @@ function renderDashboard() {
     timesWrap.className = 'team-times';
     state.teams.forEach((t) => {
       const div = document.createElement('div');
-      div.textContent = `${t.name}: ${formatDuration(totals[t.id])}`;
+      const lastSeg = [...p.segments]
+        .filter((s) => s.teamId === t.id)
+        .slice(-1)[0];
+      const lastTs = lastSeg ? lastSeg.startTs : null;
+      div.textContent = `${t.name}: ${formatDuration(totals[t.id])} - ${formatTimestamp(lastTs)}`;
       div.style.color = t.color;
       timesWrap.appendChild(div);
     });
@@ -424,7 +495,7 @@ function renderTotals() {
   state.teams.forEach((t) => {
     const div = document.createElement('div');
     div.className = 'team-total';
-    div.textContent = `${t.name}: ${formatDuration(totals[t.id])}`;
+    div.textContent = `${t.name}: ${formatDuration(totals[t.id])} - ${formatTimestamp(t.lastCapture)}`;
     div.style.color = t.color;
     totalsEl.appendChild(div);
   });
@@ -460,7 +531,7 @@ function initApp() {
     const name = document.getElementById('newTeamName').value.trim();
     const color = document.getElementById('newTeamColor').value;
     if (!name) return;
-    state.teams.push({ id: uuid(), name, color });
+    state.teams.push({ id: uuid(), name, color, lastCapture: null });
     document.getElementById('newTeamName').value = '';
     render();
     saveState();
@@ -491,6 +562,14 @@ function initApp() {
   document.getElementById('endBtn').addEventListener('click', endMatch);
   document.getElementById('resetBtn').addEventListener('click', resetMatch);
   document.getElementById('downloadLogBtn').addEventListener('click', downloadLog);
+  document.getElementById('exportCsvBtn').addEventListener('click', downloadCsv);
+  document.getElementById('importCsvBtn').addEventListener('click', () =>
+    document.getElementById('importCsvFile').click()
+  );
+  document.getElementById('importCsvFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) importCsv(file);
+  });
   document.getElementById('operatorInput').addEventListener('change', applySetup);
   document.getElementById('highContrastToggle').addEventListener('click', () => {
     document.body.classList.toggle('high-contrast');
