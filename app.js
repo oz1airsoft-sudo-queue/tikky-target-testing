@@ -63,7 +63,8 @@ let state = {
     endedAt: null,
     scenarioId: null,
     operator: ''
-  }
+  },
+  googleSheetUrl: ''
 };
 let logBuffer = '';
 
@@ -102,6 +103,13 @@ function getMatchElapsed() {
 
 function appendLog(line) {
   logBuffer += line + '\n';
+  if (state.googleSheetUrl) {
+    fetch(state.googleSheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line })
+    }).catch((err) => console.error('Failed to export to Google Sheet', err));
+  }
   saveState();
 }
 
@@ -129,6 +137,7 @@ function loadState() {
       console.error('Failed to parse state', e);
     }
   }
+  if (!state.googleSheetUrl) state.googleSheetUrl = '';
   const l = localStorage.getItem(LOG_KEY);
   if (l) logBuffer = l;
 }
@@ -139,7 +148,8 @@ function resetDefaults() {
   state = {
     teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
     points: [],
-    match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' }
+    match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' },
+    googleSheetUrl: ''
   };
   logBuffer = '';
   render();
@@ -305,6 +315,7 @@ function loadScenario(id) {
 
 function applySetup() {
   state.match.operator = document.getElementById('operatorInput').value.trim();
+  state.googleSheetUrl = document.getElementById('googleSheetUrl').value.trim();
   render();
   saveState();
 }
@@ -312,6 +323,7 @@ function applySetup() {
 // ---------- Rendering ----------
 function renderSetup() {
   document.getElementById('operatorInput').value = state.match.operator;
+  document.getElementById('googleSheetUrl').value = state.googleSheetUrl || '';
   const teamList = document.getElementById('teamList');
   teamList.innerHTML = '';
   state.teams.forEach((t) => {
@@ -492,6 +504,7 @@ function initApp() {
   document.getElementById('resetBtn').addEventListener('click', resetMatch);
   document.getElementById('downloadLogBtn').addEventListener('click', downloadLog);
   document.getElementById('operatorInput').addEventListener('change', applySetup);
+  document.getElementById('googleSheetUrl').addEventListener('change', applySetup);
   document.getElementById('highContrastToggle').addEventListener('click', () => {
     document.body.classList.toggle('high-contrast');
   });
