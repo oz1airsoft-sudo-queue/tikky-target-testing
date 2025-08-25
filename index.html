@@ -15,6 +15,9 @@
     <button id="endBtn" disabled>End</button>
     <button id="resetBtn">Reset</button>
     <button id="downloadLogBtn">Download Log</button>
+    <button id="exportCsvBtn">Export CSV</button>
+    <button id="importCsvBtn">Import CSV</button>
+    <input id="importCsvFile" type="file" accept=".csv" style="display:none">
     <span id="matchStatus"></span>
     <span id="globalTimer"></span>
   </header>
@@ -23,6 +26,10 @@
     <h2>Setup</h2>
     <div class="field">
       <label>Operator <input id="operatorInput" type="text"></label>
+    </div>
+
+    <div class="field">
+      <label>Google Sheet URL <input id="googleSheetUrl" type="text" placeholder="https://script.google.com/..."></label>
     </div>
 
     <h3>Scenarios</h3>
