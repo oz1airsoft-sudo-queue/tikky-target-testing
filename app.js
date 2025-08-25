@@ -52,9 +52,30 @@ const DEFAULT_TEAMS = [
   { id: 'militia', name: 'MILITIA', color: '#FFD700' }
 ];
 
+const DEFAULT_POINTS = [
+  { id: 'security-depot', label: 'Security Depot' },
+  { id: 'church-ruins', label: 'Church Ruins' },
+  { id: 'fort-keith', label: 'FORT Keith' },
+  { id: 'necropolis', label: 'Necropolis (Cemetary Gates)' },
+  { id: 'forest-hill', label: 'Forest Hill' },
+  { id: 'ranch', label: 'Ranch' },
+  { id: 'oilfields', label: 'Oilfields' },
+  { id: 'tank-city', label: 'Tank City' },
+  { id: 'fort-caley', label: 'FORT Caley' },
+  { id: 'fort-alastair', label: 'FORT Alastair' },
+  { id: 'fort-kurtis', label: 'FORT Kurtis' },
+  { id: 'citadel', label: 'Citadel' },
+  { id: 'shelter', label: 'SHELTER' },
+  { id: 'bunker', label: 'BUNKER' },
+  { id: 'crash-site', label: 'CRASH SITE' }
+];
+
 let state = {
-  teams: DEFAULT_TEAMS.map((t) => ({ ...t, lastCapture: null })),
-  points: [],
+
+  teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+  points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
+
+
   match: {
     state: 'idle',
     startedAt: null,
@@ -209,10 +230,13 @@ function resetDefaults() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LOG_KEY);
   state = {
-    teams: DEFAULT_TEAMS.map((t) => ({ ...t, lastCapture: null })),
-    points: [],
-    match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' },
-    googleSheetUrl: ''
+
+    teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+
+    points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
+
+    match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' }
+
   };
   logBuffer = '';
   render();
