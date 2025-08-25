@@ -2,7 +2,7 @@ body {
   font-family: Arial, sans-serif;
   margin: 0;
   padding: 0;
-  background: #e0ffff;
+  background: #2a3439;
 }
 
 input,
@@ -17,7 +17,7 @@ button {
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.5rem;
-  background: #e0ffff;
+  background: #2a3439;
 }
 
 .controls button {
@@ -31,7 +31,7 @@ button {
 
 #setupView {
   padding: 1rem;
-  background: #e0ffff;
+  background: #2a3439;
 }
 
 #setupView.hidden {
@@ -90,7 +90,7 @@ button {
 
 footer#totals {
   padding: 1rem;
-  background: #e0ffff;
+  background: #2a3439;
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
