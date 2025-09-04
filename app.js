@@ -140,6 +140,16 @@ function getMatchElapsed() {
   return ref - state.match.startedAt - state.match.totalPaused;
 }
 
+function getContrastColor(hex) {
+  if (!hex) return '#000';
+  const c = hex.replace('#', '');
+  const r = parseInt(c.length === 3 ? c[0] + c[0] : c.slice(0, 2), 16);
+  const g = parseInt(c.length === 3 ? c[1] + c[1] : c.slice(2, 4), 16);
+  const b = parseInt(c.length === 3 ? c[2] + c[2] : c.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '#000' : '#fff';
+}
+
 function appendLog(line) {
   logBuffer += line + '\n';
   if (state.googleSheetUrl) {
@@ -420,7 +430,8 @@ function renderSetup() {
   state.teams.forEach((t) => {
     const div = document.createElement('div');
     div.textContent = t.name;
-    div.style.color = t.color;
+    div.style.borderLeft = `4px solid ${t.color}`;
+    div.style.paddingLeft = '0.25rem';
     const del = document.createElement('button');
     del.textContent = 'x';
     del.addEventListener('click', () => {
@@ -464,6 +475,8 @@ function renderDashboard() {
   state.points.forEach((p) => {
     const card = document.createElement('div');
     card.className = 'point-card';
+    const borderColor = p.owner ? getTeam(p.owner).color : '#ccc';
+    card.style.borderColor = borderColor;
     const ownerName = p.owner ? getTeam(p.owner).name : 'Neutral';
     const ownerEl = document.createElement('div');
     ownerEl.className = 'owner ' + (p.owner ? '' : 'none');
@@ -500,7 +513,8 @@ function renderDashboard() {
         .slice(-1)[0];
       const lastTs = lastSeg ? lastSeg.startTs : null;
       div.textContent = `${t.name}: ${formatDuration(totals[t.id])} - ${formatTimestamp(lastTs)}`;
-      div.style.color = t.color;
+      div.style.borderLeft = `4px solid ${t.color}`;
+      div.style.paddingLeft = '0.25rem';
       timesWrap.appendChild(div);
     });
     card.appendChild(timesWrap);
@@ -510,12 +524,14 @@ function renderDashboard() {
     const neutralBtn = document.createElement('button');
     neutralBtn.textContent = 'Neutral';
     neutralBtn.style.background = '#666';
+    neutralBtn.style.color = getContrastColor('#666');
     neutralBtn.addEventListener('click', () => setOwner(p.id, null));
     ownerDisp.appendChild(neutralBtn);
     state.teams.forEach((t) => {
       const btn = document.createElement('button');
       btn.textContent = t.name;
       btn.style.background = t.color;
+       btn.style.color = getContrastColor(t.color);
       btn.addEventListener('click', () => setOwner(p.id, t.id));
       ownerDisp.appendChild(btn);
     });
@@ -532,7 +548,8 @@ function renderTotals() {
     const div = document.createElement('div');
     div.className = 'team-total';
     div.textContent = `${t.name}: ${formatDuration(totals[t.id])} - ${formatTimestamp(t.lastCapture)}`;
-    div.style.color = t.color;
+    div.style.borderLeft = `4px solid ${t.color}`;
+    div.style.paddingLeft = '0.5rem';
     totalsEl.appendChild(div);
   });
 }
