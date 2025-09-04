@@ -78,6 +78,8 @@ const CARD_SUITS = [
   { code: 'C', teamId: 'resistance', color: 'black' }
 ];
 
+const CASH_PER_MINUTE = 20;
+
 function generateCardDeck() {
   const cards = [];
   CARD_SUITS.forEach((s) =>
@@ -92,7 +94,14 @@ function generateCardDeck() {
 
 let state = {
 
-  teams: DEFAULT_TEAMS.map((t) => ({ ...t, cash: 0, chips: 0, cards: [], lastCapture: null })),
+  teams: DEFAULT_TEAMS.map((t) => ({
+    ...t,
+    cash: 0,
+    chips: 0,
+    cards: [],
+    lastCapture: null,
+    cashStart: 0
+  })),
   points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
   cards: generateCardDeck(),
 
@@ -103,8 +112,7 @@ let state = {
     totalPaused: 0,
     endedAt: null,
     scenarioId: null,
-    operator: '',
-    cashMinutes: 0
+    operator: ''
   },
   googleSheetUrl: ''
 };
@@ -171,11 +179,19 @@ function getContrastColor(hex) {
   return luminance > 0.5 ? '#000' : '#fff';
 }
 
+function getTeamCash(team) {
+  const manual = team.cash || 0;
+  const start = team.cashStart || 0;
+  const elapsed = Math.max(0, getMatchElapsed() - start);
+  const auto = Math.floor(elapsed / (60000 / CASH_PER_MINUTE));
+  return manual + auto;
+}
+
 function currencySnapshot() {
   return state.teams
     .map((t) => {
       const cards = (t.cards || []).join(',');
-      return `${t.name} cash=${t.cash || 0} chips=${t.chips || 0} cards=${cards}`;
+      return `${t.name} cash=${getTeamCash(t)} chips=${t.chips || 0} cards=${cards}`;
     })
     .join(' | ');
 }
@@ -289,14 +305,17 @@ function loadState() {
   if (s) {
     try {
       state = JSON.parse(s);
+      if (state.match && typeof state.match.cashMinutes !== 'undefined') {
+        delete state.match.cashMinutes;
+      }
       state.teams.forEach((t) => {
         if (typeof t.lastCapture === 'undefined') t.lastCapture = null;
         if (typeof t.cash === 'undefined') t.cash = 0;
         if (typeof t.chips === 'undefined') t.chips = 0;
         if (!t.cards) t.cards = [];
+        if (typeof t.cashStart === 'undefined') t.cashStart = 0;
       });
       if (!state.cards) state.cards = generateCardDeck();
-      if (!state.match.cashMinutes) state.match.cashMinutes = 0;
     } catch (e) {
       console.error('Failed to parse state', e);
     }
@@ -311,7 +330,14 @@ function resetDefaults() {
   localStorage.removeItem(LOG_KEY);
   state = {
 
-    teams: DEFAULT_TEAMS.map((t) => ({ ...t, cash: 0, chips: 0, cards: [], lastCapture: null })),
+    teams: DEFAULT_TEAMS.map((t) => ({
+      ...t,
+      cash: 0,
+      chips: 0,
+      cards: [],
+      lastCapture: null,
+      cashStart: 0
+    })),
 
     points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
     cards: generateCardDeck(),
@@ -323,8 +349,7 @@ function resetDefaults() {
       totalPaused: 0,
       endedAt: null,
       scenarioId: null,
-      operator: '',
-      cashMinutes: 0
+      operator: ''
     }
   };
   logBuffer = '';
@@ -382,7 +407,7 @@ function startMatch() {
   state.match.startedAt = now;
   state.match.totalPaused = 0;
   state.match.endedAt = null;
-  state.match.cashMinutes = 0;
+  state.teams.forEach((t) => (t.cashStart = 0));
   // start segments for points with owners
   state.points.forEach((p) => {
     if (p.owner) {
@@ -481,7 +506,14 @@ function resetMatch() {
 function loadScenario(id) {
   const sc = scenarios.find((s) => s.id === id);
   if (!sc) return;
-  state.teams = sc.teams.map((t) => ({ ...t, lastCapture: null, cash: 0, chips: 0, cards: [] }));
+  state.teams = sc.teams.map((t) => ({
+    ...t,
+    lastCapture: null,
+    cash: 0,
+    chips: 0,
+    cards: [],
+    cashStart: 0
+  }));
   state.points = sc.points.map((p) => ({ ...p, segments: [], owner: p.owner || null }));
   state.cards = generateCardDeck();
   state.match.scenarioId = sc.id;
@@ -490,7 +522,6 @@ function loadScenario(id) {
   state.match.pausedAt = null;
   state.match.totalPaused = 0;
   state.match.endedAt = null;
-  state.match.cashMinutes = 0;
   appendLog(`${nowIso()} | SCENARIO | id=${sc.name}`);
   render();
   saveState();
@@ -646,7 +677,7 @@ function renderCurrency() {
     wrap.style.borderLeft = `4px solid ${t.color}`;
 
     const cashRow = document.createElement('div');
-    cashRow.textContent = `Cash: $${t.cash || 0}`;
+    cashRow.textContent = `Cash: $${getTeamCash(t)}`;
     [10, 100, -10, -100].forEach((amt) => {
       const btn = document.createElement('button');
       btn.textContent = (amt > 0 ? '+' : '') + amt;
@@ -673,13 +704,18 @@ function renderCardsBar() {
   const bar = document.getElementById('cardBar');
   if (!bar) return;
   bar.innerHTML = '';
-  state.cards.forEach((c) => {
+  state.cards.forEach((c, idx) => {
     const btn = document.createElement('button');
     btn.textContent = c.id.replace('JOKER_', 'J');
     btn.className = c.claimed ? 'claimed' : '';
     btn.style.color = c.teamId === 'militia' ? 'red' : 'black';
     btn.addEventListener('click', () => toggleCard(c.id));
     bar.appendChild(btn);
+    if ((idx + 1) % 13 === 0 && idx < state.cards.length - 1) {
+      const sep = document.createElement('hr');
+      sep.className = 'card-separator';
+      bar.appendChild(sep);
+    }
   });
 }
 
@@ -715,7 +751,16 @@ function initApp() {
     const name = document.getElementById('newTeamName').value.trim();
     const color = document.getElementById('newTeamColor').value;
     if (!name) return;
-    state.teams.push({ id: uuid(), name, color, lastCapture: null, cash: 0, chips: 0, cards: [] });
+    state.teams.push({
+      id: uuid(),
+      name,
+      color,
+      lastCapture: null,
+      cash: 0,
+      chips: 0,
+      cards: [],
+      cashStart: getMatchElapsed()
+    });
     document.getElementById('newTeamName').value = '';
     render();
     saveState();
@@ -777,13 +822,6 @@ function initApp() {
       renderDashboard();
       renderTotals();
       renderGlobalTimer();
-      const currentMinutes = Math.floor(getMatchElapsed() / 60000);
-      if (currentMinutes > state.match.cashMinutes) {
-        for (let i = 0; i < currentMinutes - state.match.cashMinutes; i++) {
-          state.teams.forEach((t) => addCash(t.id, 20, 'AUTO'));
-        }
-        state.match.cashMinutes = currentMinutes;
-      }
       renderCurrency();
     }
   }, 1000);
