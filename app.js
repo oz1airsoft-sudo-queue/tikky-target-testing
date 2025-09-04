@@ -70,11 +70,31 @@ const DEFAULT_POINTS = [
   { id: 'crash-site', label: 'CRASH SITE' }
 ];
 
+const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const CARD_SUITS = [
+  { code: 'H', teamId: 'militia', color: 'red' },
+  { code: 'D', teamId: 'militia', color: 'red' },
+  { code: 'S', teamId: 'resistance', color: 'black' },
+  { code: 'C', teamId: 'resistance', color: 'black' }
+];
+
+function generateCardDeck() {
+  const cards = [];
+  CARD_SUITS.forEach((s) =>
+    CARD_RANKS.forEach((r) =>
+      cards.push({ id: r + s.code, teamId: s.teamId, claimed: false })
+    )
+  );
+  cards.push({ id: 'JOKER_M', teamId: 'militia', claimed: false });
+  cards.push({ id: 'JOKER_R', teamId: 'resistance', claimed: false });
+  return cards;
+}
+
 let state = {
 
-  teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+  teams: DEFAULT_TEAMS.map((t) => ({ ...t, cash: 0, chips: 0, cards: [], lastCapture: null })),
   points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
-
+  cards: generateCardDeck(),
 
   match: {
     state: 'idle',
@@ -83,7 +103,8 @@ let state = {
     totalPaused: 0,
     endedAt: null,
     scenarioId: null,
-    operator: ''
+    operator: '',
+    cashMinutes: 0
   },
   googleSheetUrl: ''
 };
@@ -150,7 +171,17 @@ function getContrastColor(hex) {
   return luminance > 0.5 ? '#000' : '#fff';
 }
 
+function currencySnapshot() {
+  return state.teams
+    .map((t) => {
+      const cards = (t.cards || []).join(',');
+      return `${t.name} cash=${t.cash || 0} chips=${t.chips || 0} cards=${cards}`;
+    })
+    .join(' | ');
+}
+
 function appendLog(line) {
+  line += ' | ' + currencySnapshot();
   logBuffer += line + '\n';
   if (state.googleSheetUrl) {
     fetch(state.googleSheetUrl, {
@@ -159,6 +190,40 @@ function appendLog(line) {
       body: JSON.stringify({ line })
     }).catch((err) => console.error('Failed to export to Google Sheet', err));
   }
+  saveState();
+}
+
+function addCash(teamId, amount, reason = 'MANUAL') {
+  const team = getTeam(teamId);
+  if (!team) return;
+  team.cash = (team.cash || 0) + amount;
+  appendLog(`${nowIso()} | CASH | team=${team.name} | delta=${amount} | reason=${reason}`);
+  renderCurrency();
+  saveState();
+}
+
+function addChips(teamId, amount) {
+  const team = getTeam(teamId);
+  if (!team) return;
+  team.chips = (team.chips || 0) + amount;
+  appendLog(`${nowIso()} | CHIPS | team=${team.name} | delta=${amount}`);
+  renderCurrency();
+  saveState();
+}
+
+function toggleCard(cardId) {
+  const card = state.cards.find((c) => c.id === cardId);
+  if (!card) return;
+  const team = getTeam(card.teamId);
+  card.claimed = !card.claimed;
+  if (card.claimed) {
+    if (!team.cards.includes(card.id)) team.cards.push(card.id);
+  } else {
+    team.cards = team.cards.filter((id) => id !== card.id);
+  }
+  appendLog(`${nowIso()} | CARD | team=${team.name} | card=${card.id} | action=${card.claimed ? 'add' : 'remove'}`);
+  renderCardsBar();
+  renderCurrency();
   saveState();
 }
 
@@ -226,7 +291,12 @@ function loadState() {
       state = JSON.parse(s);
       state.teams.forEach((t) => {
         if (typeof t.lastCapture === 'undefined') t.lastCapture = null;
+        if (typeof t.cash === 'undefined') t.cash = 0;
+        if (typeof t.chips === 'undefined') t.chips = 0;
+        if (!t.cards) t.cards = [];
       });
+      if (!state.cards) state.cards = generateCardDeck();
+      if (!state.match.cashMinutes) state.match.cashMinutes = 0;
     } catch (e) {
       console.error('Failed to parse state', e);
     }
@@ -241,12 +311,21 @@ function resetDefaults() {
   localStorage.removeItem(LOG_KEY);
   state = {
 
-    teams: DEFAULT_TEAMS.map((t) => ({ ...t })),
+    teams: DEFAULT_TEAMS.map((t) => ({ ...t, cash: 0, chips: 0, cards: [], lastCapture: null })),
 
     points: DEFAULT_POINTS.map((p) => ({ ...p, owner: null, segments: [] })),
+    cards: generateCardDeck(),
 
-    match: { state: 'idle', startedAt: null, pausedAt: null, totalPaused: 0, endedAt: null, scenarioId: null, operator: '' }
-
+    match: {
+      state: 'idle',
+      startedAt: null,
+      pausedAt: null,
+      totalPaused: 0,
+      endedAt: null,
+      scenarioId: null,
+      operator: '',
+      cashMinutes: 0
+    }
   };
   logBuffer = '';
   render();
@@ -303,6 +382,7 @@ function startMatch() {
   state.match.startedAt = now;
   state.match.totalPaused = 0;
   state.match.endedAt = null;
+  state.match.cashMinutes = 0;
   // start segments for points with owners
   state.points.forEach((p) => {
     if (p.owner) {
@@ -401,14 +481,16 @@ function resetMatch() {
 function loadScenario(id) {
   const sc = scenarios.find((s) => s.id === id);
   if (!sc) return;
-  state.teams = sc.teams.map((t) => ({ ...t, lastCapture: null }));
+  state.teams = sc.teams.map((t) => ({ ...t, lastCapture: null, cash: 0, chips: 0, cards: [] }));
   state.points = sc.points.map((p) => ({ ...p, segments: [], owner: p.owner || null }));
+  state.cards = generateCardDeck();
   state.match.scenarioId = sc.id;
   state.match.state = 'idle';
   state.match.startedAt = null;
   state.match.pausedAt = null;
   state.match.totalPaused = 0;
   state.match.endedAt = null;
+  state.match.cashMinutes = 0;
   appendLog(`${nowIso()} | SCENARIO | id=${sc.name}`);
   render();
   saveState();
@@ -554,6 +636,53 @@ function renderTotals() {
   });
 }
 
+function renderCurrency() {
+  const cont = document.getElementById('currencyCounters');
+  if (!cont) return;
+  cont.innerHTML = '';
+  state.teams.forEach((t) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'currency-team';
+    wrap.style.borderLeft = `4px solid ${t.color}`;
+
+    const cashRow = document.createElement('div');
+    cashRow.textContent = `Cash: $${t.cash || 0}`;
+    [10, 100, -10, -100].forEach((amt) => {
+      const btn = document.createElement('button');
+      btn.textContent = (amt > 0 ? '+' : '') + amt;
+      btn.addEventListener('click', () => addCash(t.id, amt));
+      cashRow.appendChild(btn);
+    });
+    wrap.appendChild(cashRow);
+
+    const chipRow = document.createElement('div');
+    chipRow.textContent = `Chips: ${t.chips || 0}`;
+    [1, 10, 100, -1, -10, -100].forEach((amt) => {
+      const btn = document.createElement('button');
+      btn.textContent = (amt > 0 ? '+' : '') + amt;
+      btn.addEventListener('click', () => addChips(t.id, amt));
+      chipRow.appendChild(btn);
+    });
+    wrap.appendChild(chipRow);
+
+    cont.appendChild(wrap);
+  });
+}
+
+function renderCardsBar() {
+  const bar = document.getElementById('cardBar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  state.cards.forEach((c) => {
+    const btn = document.createElement('button');
+    btn.textContent = c.id.replace('JOKER_', 'J');
+    btn.className = c.claimed ? 'claimed' : '';
+    btn.style.color = c.teamId === 'militia' ? 'red' : 'black';
+    btn.addEventListener('click', () => toggleCard(c.id));
+    bar.appendChild(btn);
+  });
+}
+
 function renderMatchControls() {
   document.getElementById('matchStatus').textContent = state.match.state.toUpperCase();
   document.getElementById('startBtn').disabled = state.match.state !== 'idle';
@@ -572,6 +701,8 @@ function render() {
   renderSetup();
   renderDashboard();
   renderTotals();
+  renderCardsBar();
+  renderCurrency();
   renderMatchControls();
   renderGlobalTimer();
 }
@@ -584,7 +715,7 @@ function initApp() {
     const name = document.getElementById('newTeamName').value.trim();
     const color = document.getElementById('newTeamColor').value;
     if (!name) return;
-    state.teams.push({ id: uuid(), name, color, lastCapture: null });
+    state.teams.push({ id: uuid(), name, color, lastCapture: null, cash: 0, chips: 0, cards: [] });
     document.getElementById('newTeamName').value = '';
     render();
     saveState();
@@ -646,6 +777,14 @@ function initApp() {
       renderDashboard();
       renderTotals();
       renderGlobalTimer();
+      const currentMinutes = Math.floor(getMatchElapsed() / 60000);
+      if (currentMinutes > state.match.cashMinutes) {
+        for (let i = 0; i < currentMinutes - state.match.cashMinutes; i++) {
+          state.teams.forEach((t) => addCash(t.id, 20, 'AUTO'));
+        }
+        state.match.cashMinutes = currentMinutes;
+      }
+      renderCurrency();
     }
   }, 1000);
 }
