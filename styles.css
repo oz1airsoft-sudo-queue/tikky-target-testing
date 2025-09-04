@@ -101,6 +101,42 @@ footer#totals .team-total {
   font-size: 1.1rem;
 }
 
+#currencyCounters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.currency-team {
+  display: flex;
+  flex-direction: column;
+  padding-left: 0.5rem;
+}
+
+.currency-team button {
+  margin-left: 0.25rem;
+}
+
+#cardBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  justify-content: center;
+}
+
+#cardBar button {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #fff;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+}
+
+#cardBar button.claimed {
+  opacity: 0.3;
+}
+
 body.high-contrast {
   background: #000;
   color: #fff;

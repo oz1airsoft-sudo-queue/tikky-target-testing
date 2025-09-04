@@ -10,6 +10,8 @@ Simple web app for tracking control over multiple capture points by several team
 - Default teams: RESISTANCE (purple) and MILITIA (gold).
 - Per-team last capture timestamps shown in military and 12-hour time.
 - Export logs as CSV or plain text and import logs from CSV.
+- Track team resources with automatic cash income, manual chip/cash controls,
+  and a clickable deck of cards (red for MILITIA, black for RESISTANCE).
 
 - Default capture points: Security Depot, Church Ruins, FORT Keith, Necropolis (Cemetary Gates), Forest Hill, Ranch, Oilfields, Tank City, FORT Caley, FORT Alastair, FORT Kurtis, Citadel, plus temporary blue points SHELTER, BUNKER, and CRASH SITE.
 
